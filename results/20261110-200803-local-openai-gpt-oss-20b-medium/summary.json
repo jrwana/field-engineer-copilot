@@ -1,0 +1,15 @@
+{
+  "n": 24,
+  "pass_rate": 0.7916666666666666,
+  "fact_accuracy": 0.8958333333333334,
+  "tool_choice": 0.9583333333333334,
+  "citation_hit": 0.9583333333333334,
+  "escalation_accuracy": 0.9583333333333334,
+  "escalation_category": 0.9583333333333334,
+  "no_forbidden_claims": 0.9583333333333334,
+  "grounding": 0.875,
+  "drafts_returned": 0.9583333333333334,
+  "mean_latency_s": 6.110833333333333,
+  "mean_cost_usd": 0.0,
+  "total_cost_usd": 0.0
+}

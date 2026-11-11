@@ -1,0 +1,9 @@
+part_number,family,device_type,pcie_gen,max_rate_gts,lanes,cxl_version,typical_latency_ns,typical_power_w,package,temp_range_c,status,replacement,brief_doc
+HX-R4016,Halo R4,retimer,4,16,16,none,12,4.1,FCBGA 10x10mm,0 to 85,eol,HX-R5016,PB-RETIMER
+HX-R5008,Halo R5,retimer,5,32,8,2.0,10,3.8,FCBGA 9x9mm,-40 to 105,production,,PB-RETIMER
+HX-R5016,Halo R5,retimer,5,32,16,2.0,10,6.5,FCBGA 12x12mm,-40 to 105,production,,PB-RETIMER
+HX-R6008,Halo R6,retimer,6,64,8,3.1,9,5.2,FCBGA 10x10mm,-40 to 105,sampling,,PB-RETIMER
+HX-R6016,Halo R6,retimer,6,64,16,3.1,9,8.9,FCBGA 14x14mm,-40 to 105,production,,PB-RETIMER
+HX-S6144,Halo S6,switch,6,64,144,none,95,42,FCBGA 45x45mm,0 to 95,production,,PB-SWITCH
+HX-M2200,Halo M2,cxl_memory_controller,5,32,16,2.0,85,14,FCBGA 23x23mm,0 to 95,production,,PB-MEMORY
+HX-E800,Halo E8,ethernet_retimer,,,8,none,4,11,FCBGA 17x17mm,0 to 95,production,,PB-ETHERNET
