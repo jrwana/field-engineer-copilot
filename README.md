@@ -86,3 +86,9 @@ The local backend talks to any vLLM server through its OpenAI-compatible API
 - **v1:** agent, tools, eval harness, UI, governance docs.
 - **v1.1:** local model backend; `read_doc` tool; grader fixes and `evals/regrade.py`
   (see [results notes](docs/results-notes.md)).
+
+## Live demo
+
+A hosted copy runs on a small AWS Lightsail server behind Caddy (automatic HTTPS) at an unlisted path. Sample emails **replay** the graded eval run above ([`demo/replays.jsonl`](demo/replays.jsonl), exported with `evals/export_replays.py`), so they're instant and free. An email you type runs **live** on OpenAI `gpt-5.4-mini` through the same adapter as the local backend, with per-visitor and daily caps ([`copilot/demo.py`](copilot/demo.py)). There's no model picker in the hosted copy.
+
+[`deploy/`](deploy) holds the compose file, a first-deploy script, and a pull-based auto-deploy: a systemd timer on the server redeploys when `main` moves and [CI](.github/workflows/ci.yml) passed on that commit. The API key lives only in the server's `deploy/.env`.

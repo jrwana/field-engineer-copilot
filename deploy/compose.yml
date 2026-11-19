@@ -1,0 +1,26 @@
+# The copilot, served by the market-calibration Caddy over the shared "edge" network.
+# Server-only files, never committed:
+#   path.env  STREAMLIT_SERVER_BASE_URL_PATH, the unlisted path (written by deploy.sh)
+#   .env      OPENAI_API_KEY for live runs; without it, sample emails still replay
+name: field-engineer-copilot
+
+services:
+  copilot:
+    build:
+      context: ..
+    env_file:
+      - path: path.env
+        required: true
+      - path: .env
+        required: false
+    environment:
+      PUBLIC_DEMO: "1"
+    expose:
+      - "8501"
+    networks:
+      - edge
+    restart: unless-stopped
+
+networks:
+  edge:
+    external: true

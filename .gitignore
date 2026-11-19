@@ -5,3 +5,5 @@ runs/
 results/*/results.jsonl
 .pytest_cache/
 .DS_Store
+deploy/deploy.env
+deploy/path.env
