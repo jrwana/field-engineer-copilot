@@ -67,3 +67,39 @@ def test_full_local_run_with_fake_server(monkeypatch):
     assert sent[0]["model"] == "openai/gpt-oss-20b" and sent[0]["reasoning_effort"] == "low"
     assert "fallbacks" not in sent[0] and "cache_control" not in sent[0]
     assert sent[1]["messages"][-1]["role"] == "tool"
+
+
+def test_openai_hosted_request_shape(monkeypatch):
+    """openai:<model> goes to OpenAI with a key, OpenAI's token field, and no reasoning or temperature."""
+    draft = {"answers": [], "escalations": [], "reply_email": "Thanks."}
+    sent = []
+    def fake_urlopen(req, timeout):
+        sent.append((req.full_url, dict(req.header_items()), json.loads(req.data)))
+        return _Resp({"choices": [{"finish_reason": "tool_calls", "message": {"content": None, "tool_calls": [
+            {"id": "c1", "function": {"name": "submit_draft", "arguments": json.dumps(draft)}}]}}]})
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    Copilot(model="openai:gpt-5.4-mini", effort="high").run("Hi")
+    url, headers, body = sent[0]
+    assert url == "https://api.openai.com/v1/chat/completions"
+    assert headers["Authorization"] == "Bearer sk-test"
+    assert body["model"] == "gpt-5.4-mini" and body["reasoning_effort"] == "none"
+    assert "max_completion_tokens" in body and "max_tokens" not in body and "temperature" not in body
+
+
+def test_http_error_carries_server_reason(monkeypatch):
+    import io
+    import urllib.error
+
+    from copilot.local import LocalClient
+
+    def fake_urlopen(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, 400, "Bad Request", {},
+                                     io.BytesIO(b'{"error": {"message": "bad param"}}'))
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    try:
+        LocalClient("m", api_key="k").create(max_tokens=10, system="s", tools=[], messages=[])
+    except OSError as e:
+        assert "400" in str(e) and "bad param" in str(e)
+    else:
+        raise AssertionError("expected OSError")

@@ -14,6 +14,10 @@ MAX_TURNS = 8  # hard cap on agent loop iterations
 # Self-hosted models (vLLM, OpenAI-compatible). Free to run; endpoint from LOCAL_LLM_ENDPOINT.
 LOCAL_MODELS = ["local:openai/gpt-oss-20b"]
 
+# OpenAI's hosted API through the same adapter (key from OPENAI_API_KEY). Not in PRICES, so the
+# app reports tokens rather than guessing a dollar cost.
+OPENAI_MODELS = ["openai:gpt-5.4-mini"]
+
 # USD per million tokens. Check current prices before quoting cost numbers.
 PRICES = {
     "claude-opus-5-5": {"input": 4.00, "output": 20.00, "cache_read": 0.20, "cache_write": 5.00},

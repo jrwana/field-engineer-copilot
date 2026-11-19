@@ -6,6 +6,7 @@ and the cost numbers.
 """
 
 import json
+import os
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -13,7 +14,7 @@ from dataclasses import asdict, dataclass, field
 import anthropic
 
 from . import config
-from .local import LocalClient
+from .local import OPENAI_ENDPOINT, LocalClient
 from .prompts import NUDGE, SYSTEM_PROMPT
 from .tools import TOOLS, Toolbox
 
@@ -96,10 +97,16 @@ def check_grounding(draft: dict, retrieved: set[str]) -> list[str]:
 class Copilot:
     def __init__(self, client=None, model: str = config.MODEL, effort: str = config.EFFORT,
                  max_turns: int = config.MAX_TURNS):
-        # "local:<model>" runs on a self-hosted vLLM server; anything else is Claude.
+        # "local:<model>" runs on a self-hosted vLLM server, "openai:<model>" on OpenAI's API
+        # (same adapter), anything else is Claude.
         if client is None:
-            client = (LocalClient(model.removeprefix("local:")) if model.startswith("local:")
-                      else anthropic.Anthropic())
+            if model.startswith("local:"):
+                client = LocalClient(model.removeprefix("local:"))
+            elif model.startswith("openai:"):
+                client = LocalClient(model.removeprefix("openai:"), endpoint=OPENAI_ENDPOINT,
+                                     api_key=os.environ.get("OPENAI_API_KEY"))
+            else:
+                client = anthropic.Anthropic()
         self.client = client
         self.model, self.effort, self.max_turns = model, effort, max_turns
 

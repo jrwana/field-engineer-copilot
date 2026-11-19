@@ -1,4 +1,4 @@
-"""Local model backend: a self-hosted vLLM server (OpenAI-compatible API).
+"""OpenAI-compatible backend: a self-hosted vLLM server, or OpenAI's hosted API.
 
 The agent loop is written against Anthropic's response shape. This adapter
 translates requests to OpenAI chat-completions format and translates responses
@@ -13,10 +13,12 @@ Server requirement: vLLM must be started with tool calling enabled, e.g.
 
 import json
 import os
+import urllib.error
 import urllib.request
 from types import SimpleNamespace as NS
 
 DEFAULT_ENDPOINT = "http://localhost:8000/v1"
+OPENAI_ENDPOINT = "https://api.openai.com/v1"
 _STOP = {"tool_calls": "tool_use", "stop": "end_turn", "length": "max_tokens"}
 
 
@@ -82,10 +84,12 @@ def from_openai_response(data: dict) -> NS:
 class LocalClient:
     """Drop-in for the slice of the Anthropic client the agent uses."""
 
-    def __init__(self, model: str, endpoint: str | None = None, timeout: float = 300):
+    def __init__(self, model: str, endpoint: str | None = None, timeout: float = 300,
+                 api_key: str | None = None):
         self.model = model
         self.endpoint = (endpoint or os.getenv("LOCAL_LLM_ENDPOINT", DEFAULT_ENDPOINT)).rstrip("/")
         self.timeout = timeout
+        self.api_key = api_key  # set for OpenAI's hosted API; vLLM needs none
         self.beta = NS(messages=NS(create=self.create))
 
     def create(self, *, max_tokens: int, system: str, tools: list, messages: list,
@@ -96,14 +100,28 @@ class LocalClient:
             "messages": to_openai_messages(system, messages),
             "tools": to_openai_tools(tools),
             "tool_choice": "auto",
-            "max_tokens": min(max_tokens, 8192),
-            "temperature": 0.0,
         }
+        if self.api_key:
+            # OpenAI reasoning models take max_completion_tokens and only the default temperature.
+            body["max_completion_tokens"] = min(max_tokens, 8192)
+        else:
+            body["max_tokens"] = min(max_tokens, 8192)
+            body["temperature"] = 0.0
         effort = (output_config or {}).get("effort")
-        if effort in ("low", "medium", "high"):
+        if self.api_key:
+            # OpenAI's chat-completions endpoint rejects tools combined with any reasoning effort
+            # other than "none" (it wants the Responses API for that), so hosted runs don't reason.
+            body["reasoning_effort"] = "none"
+        elif effort in ("low", "medium", "high"):
             body["reasoning_effort"] = effort  # gpt-oss reasoning models accept this
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         req = urllib.request.Request(f"{self.endpoint}/chat/completions",
-                                     data=json.dumps(body).encode(),
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=self.timeout) as r:  # raises OSError subclasses
-            return from_openai_response(json.loads(r.read()))
+                                     data=json.dumps(body).encode(), headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:  # raises OSError subclasses
+                return from_openai_response(json.loads(r.read()))
+        except urllib.error.HTTPError as e:  # surface the server's reason, not just the status
+            detail = e.read().decode(errors="replace")[:500]
+            raise OSError(f"HTTP {e.code} from {self.endpoint}: {detail}") from e

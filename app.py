@@ -5,13 +5,15 @@
 
 import difflib
 import json
+import os
 import time
+import uuid
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from copilot import config
-from copilot.agent import Copilot, save_trace
+from copilot import config, demo
+from copilot.agent import Copilot, RunResult, save_trace
 from evals.run import load_cases
 
 load_dotenv()
@@ -19,28 +21,85 @@ st.set_page_config(page_title="Field Engineer Copilot", layout="wide")
 st.title("Field Engineer Copilot")
 st.caption("Halo Interconnect is a fictional company. Drafts are reviewed by an engineer before sending.")
 
+PUBLIC = demo.enabled()
+
+
+@st.cache_resource
+def quota() -> demo.Quota:  # one set of counters per server process, shared by all sessions
+    return demo.Quota()
+
+
+@st.cache_data
+def replays() -> dict[str, dict]:
+    return demo.load_replays()
+
+
 with st.sidebar:
-    model = st.selectbox("Model", [*config.PRICES, *config.LOCAL_MODELS], index=0)
-    effort = st.selectbox("Effort", ["low", "medium", "high"], index=1)
+    if PUBLIC:
+        # Hosted demo: no model choice, so visitors can't pick an expensive one.
+        model, effort = config.OPENAI_MODELS[0], "low"
+        st.markdown(
+            "**Sample emails** replay a saved, graded eval run of the self-hosted "
+            "`gpt-oss-20b` model (instant, free).\n\n"
+            f"**Your own email** runs live on OpenAI `{model.removeprefix('openai:')}`, "
+            "a few runs per visitor per day."
+        )
+    else:
+        model = st.selectbox("Model", [*config.PRICES, *config.LOCAL_MODELS, *config.OPENAI_MODELS],
+                             index=0)
+        effort = st.selectbox("Effort", ["low", "medium", "high"], index=1)
     samples = {f"{c['id']} · {c['category']}": c["email"] for c in load_cases()}
     pick = st.selectbox("Sample email", ["(type your own)", *samples])
 
-email = st.text_area("Customer email", value=samples.get(pick, ""), height=140)
+email = st.text_area("Customer email", value=samples.get(pick, ""), height=140,
+                     max_chars=demo.MAX_EMAIL_CHARS if PUBLIC else None)
+
+
+def show_step(status, e: dict) -> None:
+    if e["type"] == "tool":
+        status.write(f"`{e['t']}s` **{e['name']}** `{json.dumps(e['input'])}`")
+    elif e["type"] == "nudge":
+        status.write("Model ended without a draft; asked it to submit one.")
+
+
+def cost_label(res: RunResult) -> str:
+    if res.model in config.PRICES:
+        return f"${res.cost_usd:.4f}"
+    if res.model.startswith("local:"):
+        return "$0 (self-hosted)"
+    u = res.usage
+    return f"{u.get('input_tokens', 0):,} in / {u.get('output_tokens', 0):,} out tokens"
+
 
 if st.button("Draft reply", type="primary", disabled=not email.strip()):
-    status = st.status("Working...", expanded=True)
-
-    def on_step(e):
-        if e["type"] == "tool":
-            status.write(f"`{e['t']}s` **{e['name']}** `{json.dumps(e['input'])}`")
-        elif e["type"] == "nudge":
-            status.write("Model ended without a draft; asked it to submit one.")
-
-    res = Copilot(model=model, effort=effort).run(email, on_step=on_step)
-    save_trace(res)
-    status.update(label=f"{res.status} · {res.latency_s}s · ${res.cost_usd:.4f}",
-                  state="complete" if res.status == "draft" else "error", expanded=False)
-    st.session_state.res = res
+    saved = replays().get(email.strip()) if PUBLIC else None
+    if saved:
+        status = st.status("Replaying saved run...", expanded=True)
+        res = RunResult(**saved["result"])
+        for e in res.trace:
+            show_step(status, e)
+        verdict = "passed" if saved["grade"]["passed"] else "failed"
+        status.update(label=f"Replay of eval run {saved['run'][:15]} · {res.model.removeprefix('local:')} · "
+                            f"{res.latency_s}s when recorded · {verdict} the eval",
+                      state="complete" if res.status == "draft" else "error", expanded=False)
+        st.session_state.res = res
+    else:
+        blocked = None
+        if PUBLIC:
+            sid = st.session_state.setdefault("sid", uuid.uuid4().hex)
+            if not os.getenv("OPENAI_API_KEY"):
+                blocked = "Live runs aren't configured on this server. Pick a sample email to see a replay."
+            else:
+                blocked = quota().try_consume(demo.client_ip(st.context.headers), sid)
+        if blocked:
+            st.warning(blocked)
+        else:
+            status = st.status("Working...", expanded=True)
+            res = Copilot(model=model, effort=effort).run(email, on_step=lambda e: show_step(status, e))
+            save_trace(res)
+            status.update(label=f"{res.status} · {res.latency_s}s · {cost_label(res)}",
+                          state="complete" if res.status == "draft" else "error", expanded=False)
+            st.session_state.res = res
 
 res = st.session_state.get("res")
 if res and res.draft:
