@@ -24,8 +24,8 @@ def test_public_demo_replays_sample_without_calling_a_model(monkeypatch):
     monkeypatch.setattr(copilot.agent.Copilot, "run",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("model called")))
     at = AppTest.from_file(APP).run(timeout=30)
-    assert len(at.sidebar.selectbox) == 1  # no model or effort picker in the public demo
-    at.sidebar.selectbox[0].select_index(1).run()
+    assert len(at.sidebar.selectbox) == 0  # no model or effort picker in the public demo
+    at.selectbox[0].select_index(1).run()
     at.button[0].click().run(timeout=30)
     assert not at.exception
     assert any("8.9" in m.value for m in at.markdown) or any("8.9" in t.value for t in at.text_area)

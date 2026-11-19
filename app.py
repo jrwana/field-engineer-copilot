@@ -49,7 +49,11 @@ with st.sidebar:
                              index=0)
         effort = st.selectbox("Effort", ["low", "medium", "high"], index=1)
     samples = {f"{c['id']} · {c['category']}": c["email"] for c in load_cases()}
-    pick = st.selectbox("Sample email", ["(type your own)", *samples])
+    if not PUBLIC:
+        pick = st.selectbox("Sample email", ["(type your own)", *samples])
+
+if PUBLIC:  # in the page, not the sidebar, so it's visible on narrow screens too
+    pick = st.selectbox("Sample email (replays a saved run)", ["(type your own)", *samples])
 
 email = st.text_area("Customer email", value=samples.get(pick, ""), height=140,
                      max_chars=demo.MAX_EMAIL_CHARS if PUBLIC else None)
@@ -79,7 +83,8 @@ if st.button("Draft reply", type="primary", disabled=not email.strip()):
         for e in res.trace:
             show_step(status, e)
         verdict = "passed" if saved["grade"]["passed"] else "failed"
-        status.update(label=f"Replay of eval run {saved['run'][:15]} · {res.model.removeprefix('local:')} · "
+        status.update(label=f"Replay of eval run {saved['run'][:15]} · self-hosted "
+                            f"{res.model.removeprefix('local:').removeprefix('openai/')} · "
                             f"{res.latency_s}s when recorded · {verdict} the eval",
                       state="complete" if res.status == "draft" else "error", expanded=False)
         st.session_state.res = res
